@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>🍬 candyboard 🍭</title>
+<title>🍭 candyboard 🍬</title>
 <style>
   /* Everything you make goes inside #stage: exactly 800 × 400 pixels. The gallery shows
      this box (shrunk to fit), so anything outside it won't be seen. */
@@ -40,7 +40,7 @@
   /* counters in the top corners */
   .stat {
     position: absolute; top: 10px; width: 120px;
-    font-size: 11px; line-height: 1.1; letter-spacing: .08em; text-transform: uppercase; color: var(--text); opacity: .85;
+    font-size: 12px; line-height: 1.1; color: var(--text); opacity: .85;
   }
   .stat b { display: block; font-size: 24px; letter-spacing: 0; color: var(--text); }
   #stat-shots { left: 14px; text-align: left; }
@@ -57,9 +57,8 @@
   }
   #menu.gone { opacity: 0; pointer-events: none; }
   #menu h1 { margin: 0; font-size: 72px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; color: var(--text); }
-  #menu .sub { margin: 14px 0 0; font-size: 18px; color: var(--text); }
-  #menu .controls { margin: 6px 0 0; font-size: 15px; color: var(--text); }
-  #menu .go { margin: 28px 0 0; font-size: 18px; font-weight: bold; color: var(--accent); }
+  #menu .sub { margin: 26px 0 0; font-size: 18px; color: var(--text); }
+  #menu .go { margin: 12px 0 0; font-size: 18px; font-weight: bold; color: var(--accent); }
 
   .hint {
     position: absolute; left: 14px; top: 290px; /* sits above the candy heap */
@@ -139,15 +138,14 @@
   <div class="stat" id="stat-shots">shots<b id="shots">0</b></div>
   <div class="stat" id="stat-letters">letters<b id="letters">0</b></div>
   <div id="board"></div>
-  <div class="hint">press or hold <kbd>space</kbd> to shoot right away<br><span id="lock-hint"><kbd>click</kbd> to capture the mouse</span><br><kbd>m</kbd> to <span id="mute-hint">mute</span></div>
+  <div class="hint">press or hold <kbd>space</kbd> to shoot right away<br><span id="lock-hint"><kbd>click</kbd> to capture the mouse</span></div>
   <div id="cannon"><div id="barrel"></div><div id="reload"><div id="reload-fill"></div></div></div>
   <svg id="path" width="800" height="400"><path id="path-line"/></svg>
   <div id="fx"></div>
   <div id="menu">
-    <h1>🍬 candyboard 🍭</h1>
-    <p class="sub">Type by shooting candy at the keyboard.</p>
-    <p class="controls">Mouse aims. Space fires, hold it to keep firing. Esc lets go of the mouse. M mutes.</p>
-    <p class="go">Click anywhere to start</p>
+    <h1>🍭 candyboard 🍬</h1>
+    <p class="sub">type by shooting candy at the keyboard.</p>
+    <p class="go">click anywhere to start</p>
   </div>
 </div>
 <script>
@@ -225,7 +223,6 @@
     aim.y = Math.min(MAX_AIM_Y, Math.max(0, aim.y + e.movementY / s));
   });
   const lockHint = document.getElementById('lock-hint');
-  const muteHint = document.getElementById('mute-hint');
   document.addEventListener('pointerlockchange', () => {
     lockHint.innerHTML = locked()
       ? 'press <kbd>esc</kbd> to let go of the mouse'
@@ -240,7 +237,7 @@
   // starts slow, then every automatic shot comes a little sooner than the last
   const FIRE_START = 5000;   // ms before the first shot
   const FIRE_MIN = 1000;     // it never gets faster than this
-  const FIRE_SPEEDUP = 0.97; // each round is 3% shorter (~2.7s after 20 shots, ~1.5s after 40)
+  const FIRE_SPEEDUP = 0.92; // each round is 8% shorter (~2.2s after 10 shots, 1s after ~20)
   let fireEvery = FIRE_START;
   const shots = [];
 
@@ -527,7 +524,6 @@
   };
   const VOLUME = 0.4; // UI sounds should be quiet
   const buffers = {};
-  let muted = false;
   // the context starts suspended and wakes up on the start click; loading can begin now
   const audio = window.AudioContext || window.webkitAudioContext
     ? new (window.AudioContext || window.webkitAudioContext)() : null;
@@ -542,7 +538,7 @@
 
   function play(name, vol = 1) {
     const b = buffers[name];
-    if (muted || !b) return;
+    if (!b) return;
     const take = Math.floor(Math.random() * SOUNDS[name][1]);
     // press, then release a moment later
     playPart(b, 1 + take, 0.2, 0, vol);
@@ -579,11 +575,6 @@
     play('land', Math.min(1, speed / 900) * 0.6);
   }
 
-  window.addEventListener('keydown', e => {
-    if (e.code !== 'KeyM') return;
-    muted = !muted;
-    muteHint.textContent = muted ? 'unmute' : 'mute';
-  });
 
   // ---- main loop ----
   let last = performance.now();
