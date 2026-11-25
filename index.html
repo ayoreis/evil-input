@@ -3,44 +3,621 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>my evil input</title>
+<title>🍬 candyboard 🍭</title>
 <style>
   /* Everything you make goes inside #stage: exactly 800 × 400 pixels. The gallery shows
      this box (shrunk to fit), so anything outside it won't be seen. */
-  html, body { margin: 0; background: #292b47; color: #eceae3; font: 16px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+  html, body { margin: 0; background: #ffe4ef; color: #b0306e; font: 16px/1.5 ui-rounded, "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif; }
   #stage {
     width: 800px; height: 400px; overflow: hidden; position: relative;
-    display: grid; place-items: center; text-align: center;
-    background: #23243d;
+    /* colour scheme: candy */
+    --bg: #ffd6e8;          /* stage */
+    --panel: #ff9ec7;       /* keyboard tray, reload track */
+    --field: #fff7fb;       /* the input */
+    --key: #fff0f6;         /* key faces, cane stripes */
+    --edge: #f06aa8;        /* key shadows, outlines */
+    --text: #b0306e;        /* letters, typed text */
+    --accent: #ff2e88;      /* hits, reload, predicted curve */
+    --on-accent: #ffffff;   /* letter on a key that was just hit */
+    --placeholder: #e597bd;
+    /* the keyboard tray colour runs from the top of the screen down to the bottom of the keyboard */
+    --tray-bottom: 282px;
+    background: linear-gradient(var(--panel) 0 var(--tray-bottom), var(--bg) var(--tray-bottom));
+    color: var(--text);
+    cursor: none;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none;
   }
 
-  /* ---- the example below: delete it and build your own ---- */
-  .vol { font-size: 64px; margin: 0; }
-  button { font: inherit; color: inherit; background: #3f4168; border: 0; border-radius: 6px; padding: .6rem 1.2rem; cursor: pointer; }
-  .hint { color: #8d8aa6; font-size: 14px; }
+  /* the input you're trying to fill */
+  #out {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    width: 520px; height: 38px; box-sizing: border-box; padding: 0 14px;
+    font: 20px ui-rounded, "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--text);
+    background: var(--field); border: 3px solid var(--panel); border-radius: 19px;
+    outline: none; caret-color: transparent; cursor: none;
+  }
+  /* counters in the top corners */
+  .stat {
+    position: absolute; top: 10px; width: 120px;
+    font-size: 11px; line-height: 1.1; letter-spacing: .08em; text-transform: uppercase; color: var(--text); opacity: .85;
+  }
+  .stat b { display: block; font-size: 24px; letter-spacing: 0; color: var(--text); }
+  #stat-shots { left: 14px; text-align: left; }
+  #stat-letters { right: 14px; text-align: right; }
+  /* start menu: the game shows through, washed out; just type on top, no card */
+  #menu {
+    position: absolute; inset: 0; z-index: 10;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 0 56px 40px; box-sizing: border-box;
+    background: rgba(255, 214, 232, .93);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); /* soften the keys behind the text */
+    cursor: pointer;
+    transition: opacity .25s;
+  }
+  #menu.gone { opacity: 0; pointer-events: none; }
+  #menu h1 { margin: 0; font-size: 72px; line-height: 1; font-weight: 800; letter-spacing: -0.04em; color: var(--text); }
+  #menu .sub { margin: 14px 0 0; font-size: 18px; color: var(--text); }
+  #menu .controls { margin: 6px 0 0; font-size: 15px; color: var(--text); }
+  #menu .go { margin: 28px 0 0; font-size: 18px; font-weight: bold; color: var(--accent); }
+
+  .hint {
+    position: absolute; left: 14px; top: 290px; /* sits above the candy heap */
+    font-size: 13px; color: var(--placeholder);
+  }
+  .hint kbd {
+    font: inherit; font-weight: bold; color: var(--text);
+    background: var(--key); border-radius: 6px; padding: 1px 8px;
+  }
+  #out::placeholder { color: var(--placeholder); }
+
+  /* the keyboard, standing up straight across the room */
+  /* wall to wall, so there's nowhere to dump a shot */
+  #board {
+    position: absolute; top: 76px; left: 0; right: 0;
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 6px; background: var(--panel); /* same 6px around and between every key */
+  }
+  .row {
+    display: flex; gap: 6px;
+    /* every key is the same width: ten keys and nine gaps fill the 788px top row */
+    --k: calc((788px - 9 * 6px) / 10);
+  }
+  /* the middle row is 9 keys wide, so it sits in by half a key each side, like a phone keyboard */
+  .row.indent { padding: 0 calc((var(--k) + 6px) / 2); }
+  .key {
+    position: relative;
+    flex: 0 0 var(--k); height: 44px; box-sizing: border-box;
+    display: grid; place-items: center;
+    background: var(--key); border-radius: 8px; font-weight: bold;
+    font-size: 20px;
+    transition: background .25s, color .25s, transform .1s;
+  }
+  /* shift and ⌫ flank the bottom letter row, sharing the leftover width: 1½ keys each */
+  .key.side { flex-basis: calc(1.5 * var(--k) + 3px); font-size: 18px; }
+  /* labels follow shift, like a phone: lowercase normally, capitals while shift is on */
+  #board.shifted .key { text-transform: uppercase; }
+  .key.on { background: var(--edge); color: var(--on-accent); }
+  .key.space { flex: 1 1 auto; }
+  .key.hit { background: var(--accent); color: var(--on-accent); transition: none; }
+
+  /* the cannon: a candy cane poking up from below the stage, pivoting just out of sight */
+  #barrel {
+    position: absolute; left: 389px; top: 300px; width: 22px; height: 110px;
+    transform-origin: 50% 100%;
+    background: repeating-linear-gradient(-35deg, var(--key) 0 8px, var(--accent) 8px 16px);
+  }
+  /* reload bar: fills up until the next shot, right along the bottom edge */
+  #reload {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 8px;
+    background: var(--panel); overflow: hidden;
+  }
+  #reload-fill { height: 100%; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+
+  /* cannonballs and explosions */
+  #fx { position: absolute; inset: 0; pointer-events: none; }
+  /* where the next shot will go (if the powder behaves) */
+  #path { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  #path-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; opacity: .7; }
+  #cannon, #barrel, #reload { pointer-events: none; }
+  /* the cannonballs are candy emoji */
+  .ball {
+    position: absolute; left: 0; top: 0; width: 38px; height: 38px; margin: -19px 0 0 -19px;
+    font-size: 33px; line-height: 38px; text-align: center;
+  }
+  .puff {
+    position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%;
+    border: 3px solid var(--accent); box-sizing: border-box;
+    animation: puff .35s ease-out forwards;
+  }
+  @keyframes puff { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
 </style>
 </head>
 <body>
 <div id="stage">
-  <!-- example evil input: volume you have to pump up by hand, and it leaks back down -->
-  <div>
-    <p class="vol"><span id="vol">0</span>%</p>
-    <button id="pump">pump volume</button>
-    <p class="hint">it leaks. keep pumping.</p>
+  <input id="out" readonly tabindex="-1" placeholder="aim with your mouse" autocomplete="off">
+  <div class="stat" id="stat-shots">shots<b id="shots">0</b></div>
+  <div class="stat" id="stat-letters">letters<b id="letters">0</b></div>
+  <div id="board"></div>
+  <div class="hint">press or hold <kbd>space</kbd> to shoot right away<br><span id="lock-hint"><kbd>click</kbd> to capture the mouse</span><br><kbd>m</kbd> to <span id="mute-hint">mute</span></div>
+  <div id="cannon"><div id="barrel"></div><div id="reload"><div id="reload-fill"></div></div></div>
+  <svg id="path" width="800" height="400"><path id="path-line"/></svg>
+  <div id="fx"></div>
+  <div id="menu">
+    <h1>🍬 candyboard 🍭</h1>
+    <p class="sub">Type by shooting candy at the keyboard.</p>
+    <p class="controls">Mouse aims. Space fires, hold it to keep firing. Esc lets go of the mouse. M mutes.</p>
+    <p class="go">Click anywhere to start</p>
   </div>
 </div>
 <script>
-  // the example: delete this too
-  let volume = 0;
-  const out = document.getElementById('vol');
-  document.getElementById('pump').addEventListener('click', () => {
-    volume = Math.min(100, volume + 7);
-    out.textContent = Math.round(volume);
+  const stage = document.getElementById('stage');
+  const out = document.getElementById('out');
+  const board = document.getElementById('board');
+  const barrel = document.getElementById('barrel');
+  const reloadFill = document.getElementById('reload-fill');
+  const shotsEl = document.getElementById('shots');
+  const lettersEl = document.getElementById('letters');
+  let shotCount = 0;
+  const pathLine = document.getElementById('path-line');
+  const fx = document.getElementById('fx');
+
+  // ---- build the keyboard ----
+  const rows = [
+    'qwertyuiop'.split(''),
+    'asdfghjkl'.split(''),
+    ['shift', ...'zxcvbnm'.split(''), 'back'],
+    ['space'],
+  ];
+  rows.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = i === 1 ? 'row indent' : 'row';
+    for (const k of r) {
+      const key = document.createElement('div');
+      key.className = 'key';
+      key.dataset.k = k;
+      if (k === 'back') { key.textContent = '⌫'; key.classList.add('side'); }
+      else if (k === 'shift') { key.textContent = '⇧'; key.classList.add('side'); }
+      else if (k === 'space') { key.textContent = ''; key.classList.add('space'); }
+      else key.textContent = k;
+      row.appendChild(key);
+    }
+    board.appendChild(row);
   });
-  setInterval(() => {
-    volume = Math.max(0, volume - 1);
-    out.textContent = Math.round(volume);
-  }, 120);
+
+  // no typing allowed, only shooting
+  out.addEventListener('keydown', e => e.preventDefault());
+  out.addEventListener('paste', e => e.preventDefault());
+
+  // ---- aiming ----
+  const PIVOT = { x: 400, y: 410 };   // where the barrel rotates around, in stage pixels
+  const BARREL = 110;
+  let aim = { x: 400, y: 180 };
+
+  // the gallery may shrink the stage, so convert between screen and stage pixels
+  function stageScale() {
+    const r = stage.getBoundingClientRect();
+    return { r, s: r.width / 800 };
+  }
+  const MAX_AIM_Y = PIVOT.y - 20; // can't shoot backwards
+  const locked = () => document.pointerLockElement === stage;
+  function onPointer(e) {
+    if (!started) return; // the cannon holds still behind the menu
+    if (locked()) return; // handled by the captured-mouse listener below
+    const { r, s } = stageScale();
+    aim.x = (e.clientX - r.left) / s;
+    aim.y = Math.min((e.clientY - r.top) / s, MAX_AIM_Y);
+  }
+  stage.addEventListener('pointermove', onPointer);
+  stage.addEventListener('pointerdown', onPointer);
+
+  // click to capture the mouse: it can't wander off to the tab bar, and moving it nudges the
+  // aim instead. Esc lets it go. (Falls back to plain aiming where capturing isn't allowed.)
+  stage.addEventListener('click', () => {
+    if (!locked() && stage.requestPointerLock) {
+      try { const p = stage.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+    }
+  });
+  document.addEventListener('mousemove', e => {
+    if (!locked() || !started) return;
+    const { s } = stageScale();
+    aim.x = Math.min(800, Math.max(0, aim.x + e.movementX / s));
+    aim.y = Math.min(MAX_AIM_Y, Math.max(0, aim.y + e.movementY / s));
+  });
+  const lockHint = document.getElementById('lock-hint');
+  const muteHint = document.getElementById('mute-hint');
+  document.addEventListener('pointerlockchange', () => {
+    lockHint.innerHTML = locked()
+      ? 'press <kbd>esc</kbd> to let go of the mouse'
+      : '<kbd>click</kbd> to capture the mouse';
+  });
+
+  function angle() {
+    return Math.atan2(aim.x - PIVOT.x, PIVOT.y - aim.y); // 0 = straight up
+  }
+
+  // ---- firing ----
+  // starts slow, then every automatic shot comes a little sooner than the last
+  const FIRE_START = 5000;   // ms before the first shot
+  const FIRE_MIN = 1000;     // it never gets faster than this
+  const FIRE_SPEEDUP = 0.97; // each round is 3% shorter (~2.7s after 20 shots, ~1.5s after 40)
+  let fireEvery = FIRE_START;
+  const shots = [];
+
+  // ---- ball physics ----
+  // The keyboard stands some distance away from the cannon. The ball is launched straight
+  // along the barrel, then gravity pulls it down and air drag slows it while it flies there.
+  // It hits whatever is in front of it when it reaches the keyboard, which is never quite
+  // where you pointed: farther keys take longer to reach, so the ball drops more.
+  const GRAVITY = 170;      // px/s², pulls the ball down the screen
+  const DRAG = 0.35;        // per second, slows the sideways/upward motion
+  const MUZZLE_JITTER = 0.05; // each shot's powder charge is ±5% off
+
+  // a ball leaving the barrel right now; power 1 = a perfect powder charge
+  function launch(power) {
+    const a = angle();
+    const from = { x: PIVOT.x + Math.sin(a) * BARREL, y: PIVOT.y - Math.cos(a) * BARREL };
+    const dist = Math.hypot(aim.x - from.x, aim.y - from.y);
+    const flight = 0.35 + dist / 700; // seconds until it reaches the keyboard
+    // the speed that would reach the cursor in a vacuum
+    const speed = dist / flight * power;
+    return { x: from.x, y: from.y, vx: Math.sin(a) * speed, vy: -Math.cos(a) * speed, t: 0, flight };
+  }
+
+  // advance a flying ball by dt seconds, stopping exactly when it reaches the keyboard
+  function step(b, dt) {
+    dt = Math.min(dt, b.flight - b.t);
+    b.t += dt;
+    b.vy += GRAVITY * dt;
+    const d = Math.exp(-DRAG * dt);
+    b.vx *= d; b.vy *= d;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+  }
+
+  const CANDIES = ['🍬', '🍭', '🍫', '🍡', '🍩', '🧁', '🍪'];
+
+  function fire() {
+    shotsEl.textContent = ++shotCount;
+    const shot = launch(1 + (Math.random() * 2 - 1) * MUZZLE_JITTER);
+    shot.el = document.createElement('div');
+    shot.el.className = 'ball';
+    shot.el.textContent = CANDIES[Math.floor(Math.random() * CANDIES.length)];
+    fx.appendChild(shot.el);
+    shots.push(shot);
+    play('shot');
+  }
+
+  // the key at a point on the stage, if any
+  function keyAt(x, y) {
+    const { r, s } = stageScale();
+    const hit = document.elementFromPoint(r.left + x * s, r.top + y * s);
+    return hit && hit.closest('.key');
+  }
+
+  // ---- fallen candies ----
+  // Once a candy reaches the keyboard it drops out of the shot: if it hit a key it bounces off
+  // and falls, if it missed it just carries on falling. Fallen candies are real little balls:
+  // they bounce off the floor, the side walls and each other, and pile up at the bottom.
+  const FLOOR = 392;          // top of the reload bar
+  const BALL_R = 19 * 0.6;    // a candy's radius by the time it gets that far
+  const FALL_GRAVITY = 900;   // px/s²
+  const BOUNCE = 0.35;        // how much speed survives a bounce
+  const MAX_BODIES = 300;     // oldest candies vanish past this, so the page stays fast
+  const bodies = [];
+
+  function drop(shot, vx, vy) {
+    bodies.push({ el: shot.el, x: shot.x, y: shot.y, vx, vy, rot: shot.t * 900 });
+    if (bodies.length > MAX_BODIES) bodies.shift().el.remove();
+  }
+
+  function physics(dt) {
+    const steps = Math.max(1, Math.ceil(dt * 120)); // small fixed-ish steps keep the pile stable
+    const h = dt / steps, D = 2 * BALL_R;
+    for (let n = 0; n < steps; n++) {
+      for (const b of bodies) {
+        b.vy += FALL_GRAVITY * h;
+        b.x += b.vx * h;
+        b.y += b.vy * h;
+      }
+      for (let it = 0; it < 3; it++) {
+        // push overlapping candies apart and bounce them off each other
+        for (let i = 0; i < bodies.length; i++) {
+          const a = bodies[i];
+          for (let j = i + 1; j < bodies.length; j++) {
+            const b = bodies[j];
+            const dx = b.x - a.x, dy = b.y - a.y;
+            if (dx >= D || dx <= -D || dy >= D || dy <= -D) continue;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= D * D) continue;
+            const d = Math.sqrt(d2) || 0.01;
+            const nx = d2 ? dx / d : 1, ny = d2 ? dy / d : 0;
+            const push = (D - d) / 2;
+            a.x -= nx * push; a.y -= ny * push;
+            b.x += nx * push; b.y += ny * push;
+            const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+            if (vn < 0) {
+              clack(-vn);
+              const imp = -(1 + BOUNCE) * vn / 2;
+              a.vx -= imp * nx; a.vy -= imp * ny;
+              b.vx += imp * nx; b.vy += imp * ny;
+            }
+          }
+        }
+        // floor and side walls
+        for (const b of bodies) {
+          if (b.y > FLOOR - BALL_R) {
+            b.y = FLOOR - BALL_R;
+            if (b.vy > 0) { clack(b.vy); b.vy = -b.vy * BOUNCE; }
+            b.vx *= 0.98; // rolling friction
+          }
+          if (b.x < BALL_R) { b.x = BALL_R; b.vx = Math.abs(b.vx) * BOUNCE; }
+          if (b.x > 800 - BALL_R) { b.x = 800 - BALL_R; b.vx = -Math.abs(b.vx) * BOUNCE; }
+        }
+      }
+    }
+    for (const b of bodies) {
+      b.rot += b.vx * dt / BALL_R * 180 / Math.PI; // roll as it moves
+      b.el.style.transform = `translate(${b.x}px, ${b.y}px) scale(0.6) rotate(${b.rot}deg)`;
+    }
+  }
+
+  // the highest point of the pile under x, for the predicted curve
+  function pileTop(x) {
+    let y = FLOOR - BALL_R;
+    for (const b of bodies) {
+      const dx = Math.abs(b.x - x);
+      if (dx < 2 * BALL_R) y = Math.min(y, b.y - Math.sqrt(4 * BALL_R * BALL_R - dx * dx));
+    }
+    return y;
+  }
+
+  // is a point anywhere on the keyboard tray (keys or the gaps between them)?
+  function onBoard(x, y) {
+    return x >= board.offsetLeft && x <= board.offsetLeft + board.offsetWidth &&
+           y >= board.offsetTop && y <= board.offsetTop + board.offsetHeight;
+  }
+
+  // the dotted curve: fly an imaginary perfect shot and trace it. If it would end off the
+  // keyboard entirely, keep tracing it as it falls onto the pile. (It stops at the keyboard
+  // even when it ends in a gap, so the gaps don't give themselves away.)
+  function drawPrediction() {
+    const b = launch(1);
+    let d = `M${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+    while (b.t < b.flight) {
+      step(b, 1 / 60);
+      d += `L${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+    }
+    if (!onBoard(b.x, b.y)) {
+      for (let i = 0; i < 300; i++) {
+        b.vy += FALL_GRAVITY / 60;
+        b.x = Math.min(800 - BALL_R, Math.max(BALL_R, b.x + b.vx / 60));
+        b.y += b.vy / 60;
+        const top = pileTop(b.x);
+        if (b.y >= top) { d += `L${b.x.toFixed(1)},${top.toFixed(1)}`; break; }
+        d += `L${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+      }
+    }
+    pathLine.setAttribute('d', d);
+  }
+
+  // the ball has reached the keyboard: type the key it hit (and bounce off it), or miss
+  function arrive(shot) {
+    const key = keyAt(shot.x, shot.y);
+    if (key) {
+      puff(shot.x, shot.y);
+      press(key);
+      drop(shot, shot.vx * 0.2, -120);
+    } else {
+      drop(shot, shot.vx, shot.vy);
+    }
+  }
+
+  // shift capitalises the next letter only, then turns itself off (hit it again to cancel)
+  let shifted = false;
+  function setShift(on) {
+    shifted = on;
+    board.classList.toggle('shifted', on);
+    board.querySelector('[data-k="shift"]').classList.toggle('on', on);
+  }
+
+  function press(key) {
+    const k = key.dataset.k;
+    if (k === 'shift') setShift(!shifted);
+    else if (k === 'back') out.value = out.value.slice(0, -1);
+    else if (k === 'space') out.value += ' ';
+    else { out.value += shifted ? k.toUpperCase() : k; setShift(false); }
+    out.scrollLeft = out.scrollWidth;
+    lettersEl.textContent = out.value.replace(/ /g, '').length; // spaces don't count
+    key.classList.add('hit');
+    setTimeout(() => key.classList.remove('hit'), 120);
+    play(k === 'space' ? 'space' : k === 'shift' || k === 'back' ? 'mod' : 'key');
+    shuffleLetters();
+  }
+
+  // every hit scrambles the letter keys, and they physically slide to their new spots
+  // (⌫ and space stay put)
+  const SHUFFLE_MS = 450;
+  const rowEls = [...board.querySelectorAll('.row')];
+  const letterKeys = [...board.querySelectorAll('.key')].filter(k => k.dataset.k.length === 1);
+  const rowSizes = rowEls.map(r => [...r.children].filter(k => k.dataset.k.length === 1).length);
+
+  function shuffleLetters() {
+    // where every key is now
+    const before = new Map(letterKeys.map(k => [k, k.getBoundingClientRect()]));
+
+    // shuffle the key elements and deal them back into the rows
+    const order = [...letterKeys];
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    let n = 0;
+    rowEls.forEach((row, r) => {
+      const fixed = row.querySelector('[data-k="back"], [data-k="space"]');
+      for (let i = 0; i < rowSizes[r]; i++) row.insertBefore(order[n++], fixed);
+    });
+
+    // start each key back where it was and glide it to its new place
+    const { s } = stageScale();
+    for (const k of letterKeys) {
+      const a = before.get(k), b = k.getBoundingClientRect();
+      // measure centre to centre, since the scale below happens around the centre
+      const dx = (a.left + a.width / 2 - b.left - b.width / 2) / s;
+      const dy = (a.top - b.top) / s;
+      const sx = a.width / b.width; // rows have slightly different key widths
+      if (!dx && !dy) continue;
+      k.animate([
+        { transform: `translate(${dx}px, ${dy}px) scaleX(${sx})`, zIndex: 1 },
+        { transform: `translate(${dx / 2}px, ${dy / 2 - 10}px) scale(1.08)`, zIndex: 1, offset: 0.5 },
+        { transform: 'none', zIndex: 1 },
+      ], { duration: SHUFFLE_MS, easing: 'ease-in-out' });
+    }
+  }
+
+  function puff(x, y) {
+    const p = document.createElement('div');
+    p.className = 'puff';
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    fx.appendChild(p);
+    p.addEventListener('animationend', () => p.remove());
+  }
+
+  // space fires right away; holding it keeps firing a steady stream
+  const HOLD_EVERY = 120; // ms between shots while space is held
+  let spaceHeld = false, sinceHold = 0;
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'Space') return;
+    e.preventDefault();
+    if (!started) return;
+    if (e.repeat || spaceHeld) return; // the stream below handles holding
+    spaceHeld = true;
+    sinceHold = 0;
+    sinceFire = 0;
+    fire();
+  });
+  window.addEventListener('keyup', e => { if (e.code === 'Space') spaceHeld = false; });
+  window.addEventListener('blur', () => { spaceHeld = false; });
+
+  // ---- start menu ----
+  // Nothing fires until you click. The click also captures the mouse (see above), since the
+  // menu sits inside the stage.
+  let started = false;
+  const menu = document.getElementById('menu');
+  menu.addEventListener('click', () => {
+    started = true;
+    sinceFire = 0;
+    menu.classList.add('gone');
+    if (audio && audio.resume) audio.resume();
+    play('start');
+  });
+
+  // ---- sound ----
+  // Button Sounds by Josh Comeau (MIT, see sounds/LICENSE). Each file holds several takes of
+  // the same click: take i's press starts at (i+1)s and lasts 200ms, its release starts 200ms
+  // after that and lasts 800ms. A random take plays every time so it never sounds robotic.
+  const SOUNDS = {
+    shot:  ['popper-empty', 5],
+    key:   ['halo-hard', 6],
+    space: ['halo-space', 7],
+    mod:   ['halo-shift', 7],       // shift and ⌫
+    land:  ['treadmill-flinty', 4], // candy hitting the floor or other candy
+    start: ['tonal-on', 4],
+  };
+  const VOLUME = 0.4; // UI sounds should be quiet
+  const buffers = {};
+  let muted = false;
+  // the context starts suspended and wakes up on the start click; loading can begin now
+  const audio = window.AudioContext || window.webkitAudioContext
+    ? new (window.AudioContext || window.webkitAudioContext)() : null;
+  for (const [name, [file]] of Object.entries(SOUNDS)) {
+    const url = `sounds/${file}.mp3`;
+    const fallback = () => { const el = new Audio(url); el.preload = 'auto'; buffers[name] = el; };
+    if (!audio) { fallback(); continue; }
+    fetch(url).then(r => r.arrayBuffer()).then(b => audio.decodeAudioData(b))
+      .then(buf => { buffers[name] = buf; })
+      .catch(fallback); // e.g. opened straight from disk, where fetch isn't allowed
+  }
+
+  function play(name, vol = 1) {
+    const b = buffers[name];
+    if (muted || !b) return;
+    const take = Math.floor(Math.random() * SOUNDS[name][1]);
+    // press, then release a moment later
+    playPart(b, 1 + take, 0.2, 0, vol);
+    playPart(b, 1.2 + take, 0.8, 0.06, vol * 0.8);
+  }
+  function playPart(b, offset, dur, delay, vol) {
+    if (b instanceof HTMLMediaElement) {
+      const el = b.cloneNode();
+      el.volume = Math.min(1, VOLUME * vol);
+      const go = () => {
+        el.currentTime = offset;
+        el.play().catch(() => {});
+        setTimeout(() => el.pause(), dur * 1000);
+      };
+      setTimeout(() => el.readyState >= 1 ? go() : el.addEventListener('loadedmetadata', go, { once: true }), delay * 1000);
+      return;
+    }
+    const src = audio.createBufferSource();
+    const gain = audio.createGain();
+    src.buffer = b;
+    gain.gain.value = VOLUME * vol;
+    src.connect(gain).connect(audio.destination);
+    src.start(audio.currentTime + delay, offset, dur);
+  }
+
+  // candy impacts: louder for harder hits, ignoring gentle settling, and rate-limited so a
+  // big pile-up doesn't turn into a buzz
+  let lastClack = 0;
+  function clack(speed) {
+    if (speed < 180) return;
+    const now = performance.now();
+    if (now - lastClack < 45) return;
+    lastClack = now;
+    play('land', Math.min(1, speed / 900) * 0.6);
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.code !== 'KeyM') return;
+    muted = !muted;
+    muteHint.textContent = muted ? 'unmute' : 'mute';
+  });
+
+  // ---- main loop ----
+  let last = performance.now();
+  let sinceFire = 0;
+  function frame(now) {
+    const dt = Math.min(now - last, 100);
+    last = now;
+
+    if (started) sinceFire += dt;
+    if (sinceFire >= fireEvery) {
+      sinceFire -= fireEvery;
+      fire();
+      fireEvery = Math.max(FIRE_MIN, fireEvery * FIRE_SPEEDUP);
+    }
+    if (spaceHeld) {
+      sinceHold += dt;
+      while (sinceHold >= HOLD_EVERY) { sinceHold -= HOLD_EVERY; sinceFire = 0; fire(); }
+    }
+    reloadFill.style.transform = `scaleX(${Math.min(1, sinceFire / fireEvery)})`;
+
+    barrel.style.transform = `rotate(${angle()}rad)`;
+    drawPrediction();
+
+    for (let i = shots.length - 1; i >= 0; i--) {
+      const b = shots[i];
+      step(b, dt / 1000);
+      const scale = 1 - 0.4 * (b.t / b.flight); // shrinks as it flies away from you
+      b.el.style.transform = `translate(${b.x}px, ${b.y}px) scale(${scale}) rotate(${b.t * 900}deg)`;
+      if (b.t >= b.flight) { shots.splice(i, 1); arrive(b); }
+    }
+    physics(dt / 1000);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 </script>
 </body>
 </html>
