@@ -7,7 +7,11 @@
 <style>
   /* Everything you make goes inside #stage: exactly 800 × 400 pixels. The gallery shows
      this box (shrunk to fit), so anything outside it won't be seen. */
-  html, body { margin: 0; background: #ffe4ef; color: #b0306e; font: 16px/1.5 ui-rounded, "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  /* the 800 × 400 stage is scaled up (or down) to fill the window, keeping its shape */
+  html, body { height: 100%; overflow: hidden; }
+  body { display: grid; place-items: center; }
+  #stage { flex: none; transform-origin: center; }
+  html, body { margin: 0; background: #ffd6e8; color: #b0306e; font: 16px/1.5 ui-rounded, "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif; }
   #stage {
     width: 800px; height: 400px; overflow: hidden; position: relative;
     /* colour scheme: candy */
@@ -150,6 +154,15 @@
 </div>
 <script>
   const stage = document.getElementById('stage');
+
+  // fill the window: everything inside is still laid out at 800 × 400, then scaled as a whole
+  // (aiming and hit-testing already convert through stageScale(), so they keep working)
+  function fitStage() {
+    const k = Math.min(window.innerWidth / 800, window.innerHeight / 400);
+    stage.style.transform = `scale(${k})`;
+  }
+  window.addEventListener('resize', fitStage);
+  fitStage();
   const out = document.getElementById('out');
   const board = document.getElementById('board');
   const barrel = document.getElementById('barrel');
